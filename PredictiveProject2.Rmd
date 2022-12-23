@@ -1,0 +1,458 @@
+---
+title: "PredictiveProject"
+author: "Michelle Nesbit"
+date: "2022-12-03"
+output: html_document: default
+---
+
+```{r, echo=FALSE}
+STtrain<- read.csv("~/Desktop/spaceship-titanic/train.csv", header=TRUE, na.strings=c(""," ","NA"))
+STtest<- read.csv("~/Desktop/spaceship-titanic/test.csv", header=TRUE, na.strings=c(""," ","NA"))
+
+library(mice)
+set.seed(22)
+
+missin <- function(x){sum(is.na(x))/length(x)*100}
+apply(STtrain,2, missin)
+
+missin2 <- function(x){sum(is.na(x))/length(x)*100}
+apply(STtest,2, missin2)
+
+tempData <- mice(STtrain,m=5,maxit=50,meth='pmm',seed=500)
+STtrain <- complete(tempData,1)
+
+temptstData <- mice(STtest,m=5,maxit=50,meth='pmm',seed=500)
+STtest <- complete(temptstData,1)
+
+val <- unique(STtrain$HomePlanet[!is.na(STtrain$HomePlanet)])
+mymode <- val[which.max(tabulate(match(STtrain$HomePlanet, val)))]   
+STtrain$HomePlanet[is.na(STtrain$HomePlanet)] <- mymode 
+
+val2 <- unique(STtrain$CryoSleep[!is.na(STtrain$CryoSleep)])
+mymode2 <- val2[which.max(tabulate(match(STtrain$CryoSleep, val2)))]   
+STtrain$CryoSleep[is.na(STtrain$CryoSleep)] <- mymode2 
+
+val3 <- unique(STtrain$Cabin[!is.na(STtrain$Cabin)])
+mymode3 <- val3[which.max(tabulate(match(STtrain$Cabin, val3)))]   
+STtrain$Cabin[is.na(STtrain$Cabin)] <- mymode3 
+
+val4 <- unique(STtrain$Destination[!is.na(STtrain$Destination)])
+mymode4 <- val4[which.max(tabulate(match(STtrain$Destination, val4)))]   
+STtrain$Destination[is.na(STtrain$Destination)] <- mymode4 
+
+val5 <- unique(STtrain$VIP[!is.na(STtrain$VIP)])
+mymode5 <- val5[which.max(tabulate(match(STtrain$VIP, val5)))]   
+STtrain$VIP[is.na(STtrain$VIP)] <- mymode5 
+
+val6 <- unique(STtest$HomePlanet[!is.na(STtest$HomePlanet)])
+mymode6 <- val6[which.max(tabulate(match(STtest$HomePlanet, val6)))]   
+STtest$HomePlanet[is.na(STtest$HomePlanet)] <- mymode6 
+
+val7 <- unique(STtest$CryoSleep[!is.na(STtest$CryoSleep)])
+mymode7 <- val7[which.max(tabulate(match(STtest$CryoSleep, val7)))]   
+STtest$CryoSleep[is.na(STtest$CryoSleep)] <- mymode7
+
+val8 <- unique(STtest$Cabin[!is.na(STtest$Cabin)])
+mymode8 <- val8[which.max(tabulate(match(STtest$Cabin, val8)))]   
+STtest$Cabin[is.na(STtest$Cabin)] <- mymode8 
+
+val9 <- unique(STtest$Destination[!is.na(STtest$Destination)])
+mymode9 <- val9[which.max(tabulate(match(STtest$Destination, val9)))]   
+STtest$Destination[is.na(STtest$Destination)] <- mymode9 
+
+val0 <- unique(STtest$VIP[!is.na(STtest$VIP)])
+mymode0 <- val0[which.max(tabulate(match(STtest$VIP, val0)))]   
+STtest$VIP[is.na(STtest$VIP)] <- mymode0
+
+library(ggplot2)
+library(viridisLite)
+library(tidyr)
+library(dplyr)
+library(vcd)
+library(readr)
+library(dlookr)
+```
+
+Introduction
+
+It’s the year 2912, and nearly half the Spaceship Titanic’s interstellar passengers have been accidentally transported to an alternate dimension. The wormhole that transported them was hidden in a dust cloud like an iceberg hiding under the water’s surface. Statistical analysis is needed to aid in the rescue of those passengers. The first step is to make a highly accurate prediction of which passengers were transported to the alternate dimension. This way we can have a list of those who need to be rescued and returned home safely. We will also have additional information on these victims and will better be able to anticipate their needs upon return. Perhaps a baby was transported and needs a diaper change or Earthlings need a path to Martian citizenship as their home planet is ablaze.
+
+Methods and EDA
+
+In order to assist with this important rescue mission, I first perform exploratory data analysis on the records recovered from the spaceship’s damaged computer system. The training dataset has 8693 observations with 13 predictors and the response variable. The test dataset has 4277 observations with 13 predictors. I convert all blanks to NAs. I found less than 5% NA values in several columns. I impute those values using the mice package for the numerical variables: RoomService, FoodCourt, ShoppingMall, Spa, and VRDeck. I created my own code to impute the mode value for the categorical variables: HomePlanet, CryoSleep, Cabin, Destination, and VIP. Name also had 2.3% missingness, but it doesn’t make sense to impute those values. Inherently, Name would have much predictive value. Additionally, it could be highly correlated with other variables like HomePlanet, Cabin, or PassengerId so I will omit that variable from my models.
+
+I start exploring the training dataset. A bar chart of Transported by HomePlanet shows just over 50% of Martians being transported to the alternate dimension. Closer to two-thirds of Europans were transported, while closer to only 40% of Earthlings were transported. 
+
+```{r, echo=FALSE}
+tab <- table(STtrain$HomePlanet, STtrain$Transported)
+barplot(tab, main="Distribution of Transported by HomePlanet",
+  xlab="Number Transported", col=cividis(3),
+  legend = rownames(tab), beside=TRUE)
+
+```
+
+
+A bar chart of Transported by CryoSleep shows the vast majority of CryoSleepers were transported, while the vast majority of non CryoSleepers were not transported. 
+
+```{r, echo=FALSE}
+tab <- table(STtrain$CryoSleep, STtrain$Transported)
+barplot(tab, main="Distribution of Transported by CryoSleep",
+  xlab="Number Transported", col=cividis(2),
+  legend = rownames(tab), beside=TRUE)
+```
+
+
+A bar chart of Transported by Destination shows proportionally more beings headed to 55 Cancri e were transported than those headed to the other two destinations. The other two destinations have about half of beings headed there rerouted to an alternate dimension. 
+
+```{r, echo=FALSE}
+tab <- table(STtrain$Destination, STtrain$Transported)
+barplot(tab, main="Distribution of Transported by Destination",
+  xlab="Number Transported", col=cividis(3), legend = rownames(tab), beside=TRUE)
+```
+
+
+Table of VIP shows only 199 of 8693 are VIP so this variable is very unbalanced. Bar chart shows slightly more VIPs are not transported. Only 2.3% are VIP.
+
+```{r, echo=FALSE}
+tab <- table(STtrain$VIP, STtrain$Transported)
+barplot(tab, main="Distribution of Transported by VIP",
+  xlab="Number Transported", col=cividis(2),
+  legend = rownames(tab), beside=TRUE)
+
+table(STtrain$VIP) 
+```
+
+
+Cabin has 6560 levels and looking at its description one can see it has a lot of relevant information to offer. Cabin is made up of deck, room number, and ship side. I separate Cabin into three new columns accordingly. PassengerId is treated similarly. It contains a group number and a passenger number so I extract the group number and create a new variable called group. Data visualizations show Decks E and F are highly populated and have large counts for both Transported values. 
+
+```{r, echo=FALSE}
+STtrain <- separate(STtrain, Cabin, c('Deck','Number','Side'))
+STtrain$Group<-STtrain$PassengerId
+STtrain <- separate(STtrain, Group, 'Group')
+
+STtrain%>% 
+  count(Transported, Deck) %>%  
+  ggplot(mapping = aes(x = Deck, y = Transported)) +
+    geom_tile(mapping = aes(fill = n))
+```
+
+
+Ship side appears to be correlated with Transported. Starboard has a higher percentage of Transported beings than port side, and it appears to be a majority of them that were indeed transported to the alternate dimension. 
+
+```{r, echo=FALSE}
+STtrain%>% 
+  count(Transported, Side) %>%  
+  ggplot(mapping = aes(x = Side, y = Transported)) +
+    geom_tile(mapping = aes(fill = n))
+```
+
+
+Mosaic plot of CryoSleep, Deck, and Side shows most CryoSleepers were on Deck A, B, C and G and slightly more on Starboard side. Non-CryoSleepers were slightly more grouped on the Port side and on Decks D, E, and F. 
+
+```{r, echo=FALSE}
+tbl<-xtabs(~ as.factor(CryoSleep)+ as.factor(Deck)+ as.factor(Side), STtrain)
+mosaic(tbl, main = "ST Categorical Data", shade=TRUE, legend=TRUE)
+```
+
+
+Lastly, I note that Group has 6217 levels so only approximately 2500 passengers are traveling in a group.
+Exploring the numerical variables, I run a correlation plot. None of them appear to be highly correlated so I don’t need to worry about multicollinearity in this bunch of variables. 
+
+```{r, echo=FALSE}
+length(levels(as.factor(STtrain$Group)))
+
+correlate(STtrain) %>% plot()
+```
+
+
+Histogram of age is slightly right skewed with a variety of values. 
+
+```{r, echo=FALSE}
+ggplot(data = STtrain) +
+  geom_histogram(mapping = aes(x = Age), fill="lightskyblue")
+```
+
+
+I make tables of the levels of the other numerical variables. They all had high counts for 0 values, and then thousands of other values with low counts. I think about mutating these variables into binary categories of 0 or 1, but decide they are continuous variables. I decide to perform a log transformation on these variables to make this variable more informative. 
+
+```{r, echo=FALSE}
+par(mfrow=c(2,2))
+hist(STtrain$RoomService, col = "skyblue")
+hist(log(STtrain$RoomService))
+hist(STtrain$FoodCourt, col = "skyblue")
+hist(log(STtrain$FoodCourt))
+par(mfrow=c(2,2))
+hist(STtrain$ShoppingMall, col = "skyblue")
+hist(log(STtrain$ShoppingMall))
+hist(STtrain$VRDeck, col = "skyblue")
+hist(log(STtrain$VRDeck))
+par(mfrow=c(1,2))
+hist(STtrain$Spa, col = "skyblue")
+hist(log(STtrain$Spa))
+```
+
+My data is almost ready to be analyzed. I create 90/10 train/test split datasets from the training dataset. This allows me to calculate classification errors to base my model comparisons on. 
+
+Models and Results
+
+I start with a logistic regression model as a baseline model. I will compare my classification error of this model with the other models to find which model I want to run the real test dataset through to get my final predictions. I build this model with the following predictors:  HomePlanet, CryoSleep, Deck, Number, Side, Destination, Age, VIP,  RoomService, FoodCourt, ShoppingMall, Spa, VRDeck, and Group. I code all categorical factors as such. My model won’t run so I remove Group and Number as they have the most levels, and VIP because it’s a very unbalanced variable.
+
+My training classification error rate is 22.1% while my test classification error is 23.22%. This seems like a decent starting point as it’s substantially better than random guessing. There are many other ways we could evaluate this model, however, with the purpose of accurate predictions the only other metric I’ll review is sensitivity That is how well the model predicts a true positive and I’ll be checking this on the preliminary test dataset. The logistic regression model has a sensitivity of 75.55%. Now let’s see if we can do better with more sophisticated models.
+
+The second type of model I want to consider is a Naïve Bayes model. This type of model works very well with large datasets like the one we are working on. The greatest restriction with a Naïve Bayes model is that the predictors should be independent. Due to this concern, I will eventually limit my predictors, but I’ll see what the full model looks like first. I try a model with all the predictors, and the train classification error is worse than random guessing. I remove PassengerId and Name and instantly the error is down to 35.61% and then 27.87% respectively. Group has thousands of levels, so I remove it and error reduces to 24.36%. Removing VIP, CryoSleep, FoodCourt, and ShoppingMall each reduces misclassification by tens of decimal points, but for parsimony I'll leave them out of the model. We have a train error rate of 22.5%. Now I run the model on the test dataset and get a test classification error rate of 27.7%. I wonder if I’ve overfit my model. I add back in everything, but CryoSleep as I logically think it could have an association with the other variables. This slightly increases train error rate, but it reduces the test error rate to 24.71%. This model has a sensitivity of 74.88%. I'll keep this as my final Naive Bayes model and move on to another model.
+
+I try a simple random forest models with 100 trees. I include all the predictors and an argument to omit any observations containing an NA because about 200 rows have NAs in the Name column. The training error rate is only 0.46%, but I’m suspicious this is due to overfitting. When we run this model on the test dataset, we get 23.79% error rate. I manually tune on the number of trees and the number of nodes. I now have a 6.62% training classification error rate, and a 22.02% test error rate. I try adding another 1000 trees, but the training error rate barely increases so I cannot justify adding them. I reduce the number of trees and find 60 trees minimizes the training error. I manually tune on number of tree nodes trying 2, 3, 5, and 7 and find 3 to reduce the error. I also try removing a few predictors that have not been useful in the other models. The accuracy improves after removing PassengerId, Name, and VIP. After all these adjustments, my training error rate is 4.81% and the test error rate is 21.44% so slightly better than the previous models. The sensitivity is 74.88%. 
+
+Conclusions
+
+Unfortunately, none of my models are substantially better than the others. They are, however, better than random guessing so they can be of service in the rescue of those who unintentionally traveled through the wormhole. The random forest model has the lowest classification rate and only slightly higher sensitivity than the logistic regression model. For those reason, I will use the tuned random forest model to create my final predictions. I train my final model on the entire original training dataset, STtrain, so that the model gets the extra ten percent of data to train on. I predict on the STtest or original test set. 
+
+I would like to try other models like lasso, support vector machines, or neural networks, but rescue crews need my predictions now. If I were to go back in time, I would take the log of the variables before imputing the values. I think this would help reduce the influence of outliers on the imputation process, provide more reasonable imputations, and perhaps increasing accuracy. Secondly, instead of using a single holdout sample to test on I would perform five- fold cross validation on every model to make sure every observation has a chance to train the model early on.
+
+Appendix
+
+```{r}
+STtrain<- read.csv("~/Desktop/spaceship-titanic/train.csv", header=TRUE, na.strings=c(""," ","NA"))
+STtest<- read.csv("~/Desktop/spaceship-titanic/test.csv", header=TRUE, na.strings=c(""," ","NA"))
+```
+
+EDA 
+Categorical variables are PassengerId, HomePlanet, CryoSleep, Cabin, Destination, VIP, Name 
+Numeric variables are Age, (amount spent at) RoomService, FoodCourt, ShoppingMall, Spa, VRDeck
+
+```{r}
+library(mice)
+set.seed(22)
+
+# Checking data for missingness
+missin <- function(x){sum(is.na(x))/length(x)*100}
+apply(STtrain,2, missin)
+
+missin2 <- function(x){sum(is.na(x))/length(x)*100}
+apply(STtest,2, missin2)
+# Less than 5% missingness in HomePlanet, CyroSleep, Cabin, Destination, Age, VIP, RoomService, FoodCourt, ShoppingMall, Spa, VRDeck and Name
+
+# Ignoring NA values in Name as it doesn't make sense to impute them are they are only 2.3% of training set and 2.2% of test set
+
+# Imputing numeric data
+tempData <- mice(STtrain,m=5,maxit=50,meth='pmm',seed=500)
+STtrain <- complete(tempData,1)
+
+temptstData <- mice(STtest,m=5,maxit=50,meth='pmm',seed=500)
+STtest <- complete(temptstData,1)
+
+# Impute modes of categorical variables: HomePlanet, CryoSleep, Cabin, Destination, VIP
+val <- unique(STtrain$HomePlanet[!is.na(STtrain$HomePlanet)])
+mymode <- val[which.max(tabulate(match(STtrain$HomePlanet, val)))]   
+STtrain$HomePlanet[is.na(STtrain$HomePlanet)] <- mymode 
+
+val2 <- unique(STtrain$CryoSleep[!is.na(STtrain$CryoSleep)])
+mymode2 <- val2[which.max(tabulate(match(STtrain$CryoSleep, val2)))]   
+STtrain$CryoSleep[is.na(STtrain$CryoSleep)] <- mymode2 
+
+val3 <- unique(STtrain$Cabin[!is.na(STtrain$Cabin)])
+mymode3 <- val3[which.max(tabulate(match(STtrain$Cabin, val3)))]   
+STtrain$Cabin[is.na(STtrain$Cabin)] <- mymode3 
+
+val4 <- unique(STtrain$Destination[!is.na(STtrain$Destination)])
+mymode4 <- val4[which.max(tabulate(match(STtrain$Destination, val4)))]   
+STtrain$Destination[is.na(STtrain$Destination)] <- mymode4 
+
+val5 <- unique(STtrain$VIP[!is.na(STtrain$VIP)])
+mymode5 <- val5[which.max(tabulate(match(STtrain$VIP, val5)))]   
+STtrain$VIP[is.na(STtrain$VIP)] <- mymode5 
+
+val6 <- unique(STtest$HomePlanet[!is.na(STtest$HomePlanet)])
+mymode6 <- val6[which.max(tabulate(match(STtest$HomePlanet, val6)))]   
+STtest$HomePlanet[is.na(STtest$HomePlanet)] <- mymode6 
+
+val7 <- unique(STtest$CryoSleep[!is.na(STtest$CryoSleep)])
+mymode7 <- val7[which.max(tabulate(match(STtest$CryoSleep, val7)))]   
+STtest$CryoSleep[is.na(STtest$CryoSleep)] <- mymode7
+
+val8 <- unique(STtest$Cabin[!is.na(STtest$Cabin)])
+mymode8 <- val8[which.max(tabulate(match(STtest$Cabin, val8)))]   
+STtest$Cabin[is.na(STtest$Cabin)] <- mymode8 
+
+val9 <- unique(STtest$Destination[!is.na(STtest$Destination)])
+mymode9 <- val9[which.max(tabulate(match(STtest$Destination, val9)))]   
+STtest$Destination[is.na(STtest$Destination)] <- mymode9 
+
+val0 <- unique(STtest$VIP[!is.na(STtest$VIP)])
+mymode0 <- val0[which.max(tabulate(match(STtest$VIP, val0)))]   
+STtest$VIP[is.na(STtest$VIP)] <- mymode0
+
+# Cabin has 6560 levels 
+length(levels(as.factor(STtrain$Cabin)))
+
+# Cabin is a combination of 3 more variables deck/num/side and has to do with where a person might be located on the ship. This information seems like it could have predictive value. I'm going to separate out deck and side as usual variables.
+
+STtrain <- separate(STtrain, Cabin, c('Deck','Number','Side'))
+STtest <- separate(STtest, Cabin, c('Deck','Number','Side'))
+
+STtrain$Group<-STtrain$PassengerId
+STtest$Group<-STtest$PassengerId
+
+STtrain <- separate(STtrain, Group, 'Group')
+STtest <- separate(STtest, Group, 'Group')
+```
+
+
+HomePlanet and CryoSleep are not highly associated. Ideally, I would like to evaluate association/correlation of all categorical variables and/or all variables.
+
+```{r}
+Cats<-xtabs(~HomePlanet+ CryoSleep, data=STtrain)
+assocstats(Cats)
+```
+
+
+Log transformation to make these variables more useful and they're patterns easier to detect. Can't take the log of 0 though so I'll use an ifelse statement. 
+
+```{r}
+STtrain$RoomService<-ifelse(STtrain$RoomService == 0, 0, log(STtrain$RoomService))
+STtest$RoomService<-ifelse(STtest$RoomService == 0, 0, log(STtest$RoomService))
+
+STtrain$FoodCourt<-ifelse(STtrain$FoodCourt == 0, 0, log(STtrain$FoodCourt))
+STtest$FoodCourt<-ifelse(STtest$FoodCourt == 0, 0, log(STtest$FoodCourt))
+
+STtrain$ShoppingMall<-ifelse(STtrain$ShoppingMall == 0, 0, log(STtrain$ShoppingMall))
+STtest$ShoppingMall<-ifelse(STtest$ShoppingMall == 0, 0, log(STtest$ShoppingMall))
+
+STtrain$VRDeck<-ifelse(STtrain$VRDeck == 0, 0, log(STtrain$VRDeck))
+STtest$VRDeck<-ifelse(STtest$VRDeck == 0, 0, log(STtest$VRDeck))
+
+STtrain$Spa<-ifelse(STtrain$Spa == 0, 0, log(STtrain$Spa))
+STtest$Spa<-ifelse(STtest$Spa == 0, 0, log(STtest$Spa))
+```
+
+
+Somewhat higher correlation now, but nothing over .5 so not to worry
+
+```{r}
+correlate(STtrain) %>% plot()
+```
+
+
+Divide the training dataset into 90/10 training/test set
+
+```{r}
+set.seed(1942)
+dt = sort(sample(nrow(STtrain), nrow(STtrain)*.9))
+trn2<-STtrain[dt,]
+tst2<-STtrain[-dt,]
+```
+
+
+Model 1: Logistic Regression 
+
+```{r}
+set.seed(14)
+LogRegMod <- glm(as.factor(Transported) ~ as.factor(HomePlanet) + as.factor(CryoSleep) + as.factor(Deck) + as.factor(Side) + as.factor(Destination) + Age + RoomService + FoodCourt + ShoppingMall + +Spa + VRDeck, family = "binomial", data=trn2)
+summary(LogRegMod)
+
+LR.y_pred = predict(LogRegMod, trn2, type="response")
+LR.y_pred <- ifelse(LR.y_pred > 0.51, "True", "False")
+
+# Confusion matrix to check classification error on training data, which is at 22.1%
+LRT<-table(trn2$Transported, LR.y_pred)
+ErrorLR <- sum(LRT[2], LRT[3]) / sum(LRT[1:4])
+ErrorLR
+
+# Predict on test data gives us 23.22%
+LR.y_hat = predict(LogRegMod, tst2, type="response")
+LR.y_hat <- ifelse(LR.y_hat > 0.51, "True", "False")
+LRTst<-table(tst2$Transported, LR.y_hat)
+
+ErrorLRtst <- sum(LRTst[2], LRTst[3]) / sum(LRTst[1:4])
+ErrorLRtst
+
+sensitivity.LR <- LRTst[4] / sum(LRTst[4], LRTst[3])
+sensitivity.LR
+```
+
+
+Model 2: Naive Bayes
+
+```{r}
+library(e1071)
+NBMod<-naiveBayes(as.factor(Transported)~.-PassengerId-Name-Group-CryoSleep, data=trn2) 
+
+yhat <- predict(NBMod, newdata = trn2)
+NB<-table(yhat, trn2$Transported)
+
+ErrorNB <- sum(NB[2], NB[3]) / sum(NB[1:4])
+ErrorNB
+
+yhat <- predict(NBMod, newdata = tst2)
+NB<-table(yhat, tst2$Transported)
+
+ErrorNB <- sum(NB[2], NB[3]) / sum(NB[1:4])
+ErrorNB
+
+sensitivity.NB <- NB[4] / sum(NB[4], NB[3])
+sensitivity.NB
+```
+
+
+Model 3: Random Forest 
+
+```{r}
+library(randomForest)
+set.seed(411)
+RFMod<-randomForest(as.factor(Transported)~., data=trn2, ntree=100, na.action=na.omit, classification=TRUE) 
+
+yhat <- predict(RFMod, newdata = trn2)
+RF<-table(yhat, trn2$Transported)
+
+ErrorRF <- sum(RF[2], RF[3]) / sum(RF[1:4])
+ErrorRF
+
+yhat <- predict(RFMod, newdata = tst2)
+RF<-table(yhat, tst2$Transported)
+
+ErrorRF <- sum(RF[2], RF[3]) / sum(RF[1:4])
+ErrorRF
+
+set.seed(511)
+RFMod<-randomForest(as.factor(Transported)~.-PassengerId-Name-VIP, data=trn2, na.action=na.omit, ntree=60, max.nodes=3, classification=TRUE)
+
+yhat <- predict(RFMod, newdata = trn2)
+RF<-table(yhat, trn2$Transported)
+
+ErrorRF <- sum(RF[2], RF[3]) / sum(RF[1:4])
+ErrorRF
+
+yhat <- predict(RFMod, newdata = tst2)
+RF<-table(yhat, tst2$Transported)
+
+ErrorRF <- sum(RF[2], RF[3]) / sum(RF[1:4])
+ErrorRF
+
+sensitivity.NB <- NB[4] / sum(NB[4], NB[3])
+sensitivity.NB
+```
+
+
+Final model and prediction. I saw several NA predictions in rows with missing names. I will impute a Name to get predictions for these rows.
+
+```{r}
+NamesMissing <- unique(STtest$Name[!is.na(STtest$Name)])
+N.M.Imputing <- NamesMissing[which.max(tabulate(match(STtest$Name, NamesMissing)))]   
+STtest$Name[is.na(STtest$Name)] <-N.M.Imputing 
+
+library(randomForest)
+set.seed(511)
+RFMod<-randomForest(as.factor(Transported)~.-PassengerId-Name-VIP, data=STtrain, na.action=na.omit, ntree=60, max.nodes=3, classification=TRUE)
+
+STpredictions <- predict(RFMod, newdata = STtest)
+STpredictions<-cbind(STtest$PassengerId, STpredictions)
+S.T.predictions<-data.frame(STpredictions)
+colnames(S.T.predictions)[1] ="PassengerId"
+colnames(S.T.predictions)[2] ="Transported"
+
+# R assigns 1 and 2 alphabetically so 1=F and 2=T
+
+S.T.predictions$Transported<-ifelse(S.T.predictions$Transported == 1, "False", "True")
+write.csv(S.T.predictions,"~/Desktop/S.T.predictions.csv", row.names = FALSE)
+```
+
